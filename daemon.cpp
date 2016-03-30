@@ -108,7 +108,7 @@ int main(void)
 
     /* Close out the standard file descriptors */
     close(STDIN_FILENO);
-    close(STDOUT_FILENO);
+    //close(STDOUT_FILENO);
     close(STDERR_FILENO);
 
     struct Settings *settings = (Settings *)malloc(sizeof *settings);
@@ -144,13 +144,12 @@ int main(void)
             shouldUpdate = pollLocs();
         }
         fprintf(f, "settings.scheduledUpdate: %d\n", settings->scheduledUpdate);
-        pollTime(masterList, fPtr);
 
-        if (settings->scheduledUpdate)
+        /*if (settings->scheduledUpdate)
         {
-            /*shouldUpdate = */pollTime(masterList, fPtr);
+            /*shouldUpdate = pollTime(masterList, fPtr);    PollTime is giving some trouble so it is excluded from current execution
 
-        }
+        }*/
         if (settings->driveUpdate)
         {
             shouldUpdate = pollDrives();
@@ -189,24 +188,29 @@ int main(void)
 
 int pollLocs()
 {
-    
+    return 0;
 }
 
 int pollDrives()
 {
     /*if a path on the list that previously didn't exist does now return its path to update*/
+    return 0;
 }
 
 int pollTime(UpdateList* list, FILE** fLog)
 {
     int returnVal = 0;
-    time_t curTime = time(NULL);
+    time_t rawTime;
     struct tm *cTime;
-    cTime = localtime(&curTime);
+    fputs("BEFORE ERROR STATEMENT\n", *fLog);
+    time(&rawTime);
+    fputs("after first fprintf", *fLog);
+    cTime = localtime(&rawTime);            //This is the line causing all the problems
     fprintf(*fLog, "list.tAddr[0].wasUsed: %d (Inside of pollTime)\n", list->tAddr[0].wasUsed);
+    fputs("after sencond fprintf", *fLog);
     TimeAddress *timesList = new TimeAddress[list->tSize];
     int arraySize = list->tSize;
-    memcpy(timesList, list->tAddr, sizeof(timesList)); //Copies from masterList to times list
+    memcpy(timesList, list->tAddr, sizeof(*timesList)); //Copies from masterList to times list
 
     fprintf(*fLog, "timesList[0].wasUsed: %d\n", timesList[0].wasUsed);
 
@@ -226,7 +230,7 @@ int pollTime(UpdateList* list, FILE** fLog)
     return returnVal;
 }
 
-int updateLocs(){}
+int updateLocs(){ return 0; }
 
 int checkFifo(char *fifoPath, char buf[MAX_BUF], int fd, FILE* fLog)
 {
@@ -235,12 +239,15 @@ int checkFifo(char *fifoPath, char buf[MAX_BUF], int fd, FILE* fLog)
     if (fd < 0)
     {
         fprintf(fLog, "checkFifo(): open() failed\n");
+        return 0;
     }
     if (read(fd, buf, MAX_BUF) < 0)
     {
         fprintf(fLog, "checkFifo(): read() failed\n");
+        return 0;
     }
     fprintf(fLog, "Received: %s\n", buf);
+    return 1;
 }
 
 
