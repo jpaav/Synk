@@ -9,77 +9,190 @@
 #include <fcntl.h>
 #include <sys/types.h>
 #include <sys/stat.h>
-#include <sys/wait.h>
 #include <dirent.h>
+#include <tinyxml2.h>
 
 #pragma GCC diagnostic ignored "-Wwrite-strings"
 
-struct Pairs
+using namespace tinyxml2;
+
+struct Pair
 {
 	char source[256];
 	char dest[256];
 };
 
-Pairs parseData();
-int copyFile(char[], char[]);
-int copyDir(char[], char[]);
+int parseData(XMLDocument*, Pair[], int);
+int copyFile(char[], char[], int);
+int copyDir(char[], char[], int);
+void constToChar(const char*, char*);
 
 int main(int argc, char const *argv[])
 {
-	//FILE* f;
-	int pairNum = 1;	//Zero means no init
-	//Read Num of pairs from file
-	//Read pairs from file
-	Pairs exPair = {"/home/joseph/Documents/C_C++/Synk/Example_Source", "/home/joseph/Documents/C_C++/Synk/Example_Dest"};		//Example pair
-	Pairs pairsList[pairNum];
-
-	pairsList[0] = exPair;
-
-	/*for (int i = 0; i < pairNum; ++i)
+	int pairNum = -1;	//Zero means no init
+	int bufLen = 1;
+	XMLDocument* data = new XMLDocument();
+	const char *xmlDocName = "data.xml";
+	if (argc > 1)
 	{
-		parseData();
-	}*/
-	struct stat pathStat;
+		xmlDocName = argv[1];
+	}
+
+	//NEED ERROR CHECKING FOR THIS LINE!
+	//VVVVVVVVVVVVVVVVVVVVVVVVVV
+	data->LoadFile( xmlDocName );
+	XMLElement* pairsElem = data->FirstChildElement();
+	pairsElem->QueryIntAttribute("num", &pairNum);	//Read Num of pairs from file
+	pairsElem->QueryIntAttribute("buf", &bufLen);
+	bufLen *= 1024;
+
+	if (pairNum == -1)	//Makes sure pairNum was properly assigned and is not 0
+	{
+		printf("ERROR: pairNum failed to initialize from data.xml\n");
+		exit(EXIT_FAILURE);
+	}
+	else if (pairNum == 0)
+	{
+		printf("pairNum is set to zero in data. XMLDocument\n");
+		exit(EXIT_SUCCESS);
+	}
+	printf("pairNum: %d\n", pairNum);
+	Pair pairsList[pairNum];//q = {std::string(""),  std::string("")};
+	parseData(data, pairsList, pairNum);	//Parses XML file for path values and other settings
+	delete data;
+
+
+	struct stat sourceStat;	//used to extract info from stat
+	struct stat destStat;
 	for (int k = 0; k < pairNum; ++k)
 	{
-		if(stat(pairsList[k].source, &pathStat) == -1)	//Gets source info
+		int asdf = stat(pairsList[k].source, &sourceStat);
+		int fdsa = stat(pairsList[k].dest, &destStat);
+		if(asdf == -1 || fdsa == -1)	//Gets source/dest info
 		{
-			printf("ERROR: stat() failed (%s)\n", strerror(errno));
-			exit(EXIT_FAILURE);
+			printf("ERROR: stat() failed on pair %d (%s)\n", k+1, strerror(errno));
+			printf("Source: %s\n", pairsList[k].source);
+			return 1;
 		}
-		if(S_ISDIR(pathStat.st_mode))	//Checks if source is a directory
+		if(S_ISDIR(sourceStat.st_mode) && S_ISDIR(destStat.st_mode))	//Checks if source/dest are directories
 		{
-			if(copyDir(pairsList[k].source, pairsList[k].dest) == 1)
+			if(copyDir(pairsList[k].source, pairsList[k].dest, bufLen) == 1)
 			{
 				printf("ERROR: copyDir failed on source %s\n", pairsList[pairNum].source);
 				return 1;
 			}
 		}
-		else	//Source is not a directory
+		else if(S_ISREG(sourceStat.st_mode) && S_ISREG(destStat.st_mode))	//Source and dest are regular files
 		{
-			if(copyFile(pairsList[k].source, pairsList[k].dest) == -1)
+			if(copyFile(pairsList[k].source, pairsList[k].dest, bufLen) == -1)
 			{
 				printf("ERROR: copyFile failed on source %s\n", pairsList[pairNum].source);
 				return 1;
 			}
 		}
+		else	//Source and dest are not the same type of path
+		{
+			printf("Source and dest are not the same type of path or are unsupported types. Skipping pair %d.\n", k+1);
+		}
 	}
-
 	return 0;
 }
 
-Pairs parseData()
+int parseData(XMLDocument* data, Pair pList[], int pNum)
 {
-	struct Pairs pr;
-	return pr;
+	XMLElement* pairElem = data->FirstChildElement()->FirstChildElement();	//Navigates to "Pairs" -> first "pair" or its equilavalent
+	for (int i = 0; i < pNum; ++i)
+	{
+		if (i > 0)
+		{
+		pairElem = pairElem->NextSiblingElement();
+		}
+		//Gets source and destination paths
+		const char* xmlSrc = pairElem->FirstChildElement("src")->GetText();
+		const char* xmlDst = pairElem->FirstChildElement("dst")->GetText();
+		if (xmlSrc != NULL)
+		{
+			//pList[i].source = strdup(xmlSrc);
+			//strcpy(xmlSrc, pList[i].source);
+			unsigned int srcLen = strlen(xmlSrc);
+			for (int l = 0; l < srcLen; ++l)
+			{
+				pList[i].source[l] = xmlSrc[l];
+			}
+			pList[i].source[srcLen] = '\0';
+		}
+		else
+		{
+			printf("XML source for pair %d is NULL. Skipping pair.\n", i+1);
+			continue;
+		}
+		if (xmlDst != NULL)
+		{
+			//pList[i].dest = strdup(xmlDst);
+			//strcpy(xmlDst, pList[i].dest);
+			unsigned int dstLen = strlen(xmlDst);
+			for (int l = 0; l < dstLen; ++l)
+			{
+				pList[i].dest[l] = xmlDst[l];
+			}
+			pList[i].dest[dstLen] = '\0';
+		}
+		else
+		{
+			printf("XML destination for pair %d is NULL Skipping pair.\n", i+1);
+		}
+		//Gets list of ignored extensions
+		//Check if pair has attribute	
+		/*const char *constExtList = pairElem->FirstChildElement("iext")->GetText();//List of ignored exts in one string
+		char *extList;
+		if (constExtList != NULL && constExtList != "")
+		{
+			strcpy(extList, constExtList);
+			//constToChar(constExtList, extList);
+			}/*
+			int count = 0;
+			char *extArray[3];	//Separated list of exts
+			char *buffer;
+			buffer = strtok(extList, ";");
+			while(buffer != NULL)
+			{
+				extArray[count] = buffer;
+				buffer = strtok(NULL, ";");
+				++count;
+			}
+		}
+		*/
+
+
+	}
+	return 0;
 }
 
-int copyFile(char src[], char dst[])
+/*char* strcat_copy(const char *str1, char *str2)
+{
+	int str1_len, str2_len;
+	char *new_str;
+	if (str1 == NULL || str2 == NULL)
+	{
+		printf("One of these strings is NULL!\n");
+		return NULL;
+	}
+	
+	str1_len = strlen(str1);
+	str2_len = strlen(str2);
+
+	new_str = malloc(str1_len + str2_len +1);
+	memcpy(new_str, str1, str1_len);
+	memcpy(new_str + str1_len, str2, str2_len);
+	return new_str;
+
+}*/
+
+int copyFile(char src[], char dst[], int LEN)
 {
 	std::ifstream  srcStream;
     std::ofstream  dstStream;
 
-	const int LEN=8192;		//4k buffer
 	char buffer_out[LEN];
 	char buffer_in[LEN];
 	if (LEN) {
@@ -100,75 +213,104 @@ int copyFile(char src[], char dst[])
 	return 0;
 }
 
-int copyDir(char src[], char dst[])
+int copyDir(char src[], char dst[], int LEN)
 {
 	DIR *dir;
 	struct dirent *ent;
-	if((dir = opendir(src)) != NULL)
+	if((dir = opendir(src)) != NULL)	//Opens source directory
 	{
-		while((ent = readdir(dir)) != NULL)
+		while((ent = readdir(dir)) != NULL)		//Reads elements (files/dirs) from parent directory
 		{
 			if (ent->d_type == DT_DIR && strcmp(ent->d_name, ".") != 0 && strcmp(ent->d_name, "..") != 0)
-			{
-				char newDest[256];
-				strncpy(newDest, dst, 254);
-				strncat(newDest, "/", 1);	//Will check if string already has "/" in the future
-				strncat(newDest, ent->d_name, 255-sizeof(newDest));
-				strncat(newDest, "\0", 1);
+			{									//^^^Checks if element is a directory and not "."/".."^^^
+				char newDest[256];		//Creates new destination for recursive call
+				strncpy(newDest, dst, 255);
+				if (newDest[-1] != '/')
+				{
+					strncat(newDest, "/", 1);
+				}
+				strncat(newDest, ent->d_name, 255-strlen(newDest));
 
-
-				char newSource[256];
-				strncpy(newSource, src, 254);
-				strncat(newSource, "/", 1);	//Will check if string already has "/" in the future
-				strncat(newSource, ent->d_name, 255-sizeof(newSource));
-				strncat(newSource, "\0", 1);
 				
-				printf("Directory at: %s\n", ent->d_name);
+				char newSource[256];		//Creates new source for recursive call
+				strncpy(newSource, src, 255);
+				printf("Directory at: %s\n", newSource);
+				if (newSource[-1] != '/')
+				{
+					strncat(newSource, "/", 1);
+				}
+				strncat(newSource, ent->d_name, 255-strlen(newSource));
+
+				
+				printf("Directory at: %s\n", newSource);
 
 				struct stat *statInfo;
 
-				if (stat(newDest, statInfo) == -1)
+				if (stat(newDest, statInfo) == -1)	//Makes a dir if there isn't one yet
 				{
 					mkdir(newDest, 0777);
 				}
 
-				if(copyDir(newSource, newDest) == 1)
+				if(copyDir(newSource, newDest, LEN) == 1)		//Recursive call
 				{
 					printf("ERROR: copyDir() failed (%s)\n", errno);
 				}
 			}
 			else if (ent->d_type == DT_REG)
-			{
-				char newDest[256];
-				strncpy(newDest, dst, 254);
-				strncat(newDest, "/", 1);	//Will check if string already has "/" in the future
+			{								//Checks if element is a regular file
+				char newDest[256];	//Creates new destination for recursive call
+				strncpy(newDest, dst, 255);
+				if (newDest[-1] != '/')
+				{
+					strncat(newDest, "/", 1);
+				}
 				strncat(newDest, ent->d_name, 255-sizeof(newDest));
-				strncat(newDest, "\0", 1);
 
-				char newSource[256];
-				strncpy(newSource, src, 254);
-				strncat(newSource, "/", 1);
+				char newSource[256];	//Creates new source for recursive call
+				strncpy(newSource, src, 255);
+				if (newSource[-1] != '/')
+				{
+					strncat(newSource, "/", 1);
+				}
 				strncat(newSource, ent->d_name, 255-sizeof(newSource));
-				strncat(newSource, "\0", 1);
-`
+
 
 				printf("File at: %s\n", newSource);
 
-				if(copyFile(newSource, newDest) == 1)
+				if(copyFile(newSource, newDest, LEN) == 1)	//Recursive call
 				{
 					printf("ERROR: copyFile() failed (%s)\n", errno);
 				}
 			}
 		}
 		printf("End of directory (%s)\n", src);
+		return 0;
 	}
 	else
 	{
-		//set errno
+		printf("ERROR: opendir failed on source %s\n", src);
 		return 1;
 	}
-
-
-
-	return 0;
 }
+void constToChar(const char* source, char* destination)
+{
+	unsigned int srcLen = strlen(source);
+	for (int l = 0; l < srcLen; ++l)
+	{
+		printf("%d\n", l);
+		destination[l] = source[l];
+	}
+	destination[srcLen] = '\0';
+}
+
+
+
+
+
+
+
+
+
+
+
+

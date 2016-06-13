@@ -1,0 +1,13 @@
+<?xml version="1.0"?>
+<pairs num='2' buf='4'>
+	<pair>
+		<src>/home/joseph/Documents/C_C++/Synk/Example_Source</src>
+		<dst>/home/joseph/Documents/C_C++/Synk/Example_Dest</dst>
+		<iext>yaml;xml</iext>
+	</pair>
+	<pair>
+		<src>/home/joseph/Documents/C_C++/Synk/Example_Source_2</src>
+		<dst>/home/joseph/Documents/C_C++/Synk/Example_Dest_2</dst>
+		<iext></iext>
+	</pair>
+</pairs>
